@@ -6,7 +6,7 @@ import pandas as pd
 
 # ------------------ Configurations ------------------
 st.set_page_config(page_title=" Budget Tracker", page_icon="💸", layout="centered")
-st.title("💰 Personal Budget Tracker App")
+st.title(" Personal Budget Tracker App")
 
 # ------------------ File Paths ------------------
 CREDENTIALS_FILE = "user_credentials.json"
