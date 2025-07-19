@@ -5,8 +5,23 @@ import plotly.express as px
 import pandas as pd
 
 # ------------------ Configurations ------------------
-st.set_page_config(page_title=" Budget Tracker", page_icon="💸", layout="centered")
-st.title("Personal Budget Tracker App")
+st.set_page_config(page_title="Budget Tracker", page_icon="💸", layout="centered")
+
+# Centered title using HTML
+st.markdown("""
+    <h1 style='
+        text-align: center;
+        font-size: 40px;
+        font-weight: 700;
+        background: linear-gradient(to right, #3a6073, #16222a);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: none;
+        margin-bottom: 30px;
+    '>
+        Personal Budget Tracker
+    </h1>
+""", unsafe_allow_html=True)
 
 # ------------------ File Paths ------------------
 CREDENTIALS_FILE = "user_credentials.json"
@@ -66,41 +81,64 @@ def save_budget_data(filepath, initial_budget, expenses):
         json.dump(data, file, indent=4)
 
 # ------------------ Authentication ------------------
+if "users" not in st.session_state:
+    st.session_state.users = {"admin": "admin"}
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = "Login"
 
+def login(username, password):
+    return username in st.session_state.users and st.session_state.users[username] == password
+
+def register(username, password):
+    if username in st.session_state.users:
+        return False
+    st.session_state.users[username] = password
+    return True
+
+# ---------- MAIN UI ----------
 if not st.session_state.logged_in:
-    tab1, tab2 = st.tabs(["🔐 Login", "🆕 Register"])
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.session_state.auth_mode == "Login":
+            st.markdown("<h3 style='text-align: center;'>🔐 Login</h3>", unsafe_allow_html=True)
+            username = st.text_input("👤 Username", key="login_username")
+            password = st.text_input("🔑 Password", type="password", key="login_password")
+            if st.button("Login"):
+                if login(username, password):
+                    st.session_state.logged_in = True
+                    st.session_state.username = username
+                    st.success("✅ Login successful!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid username or password")
+        elif st.session_state.auth_mode == "Register":
+            st.markdown("<h3 style='text-align: center;'>🆕 Register</h3>", unsafe_allow_html=True)
+            new_username = st.text_input("🆕 New Username")
+            new_password = st.text_input("🔑 New Password", type="password")
+            if st.button("Register"):
+                if register(new_username, new_password):
+                    st.success("✅ Registered successfully! You can now log in.")
+                else:
+                    st.error("❌ Username already exists. Try another.")
 
-    with tab1:
-        st.subheader("🔐 Login")
-        username = st.text_input("👤 Username", key="login_username")
-        password = st.text_input("🔑 Password", type="password", key="login_password")
-        if st.button("Login"):
-            if login(username, password):
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.success("✅ Login successful!")
+        st.markdown("---")
+        if st.session_state.auth_mode == "Login":
+            if st.button("🆕 New here? Register"):
+                st.session_state.auth_mode = "Register"
                 st.rerun()
-            else:
-                st.error("❌ Invalid username or password")
-
-    with tab2:
-        st.subheader("🆕 Register")
-        new_username = st.text_input("🆕 Create Username")
-        new_password = st.text_input("🔑 Create Password", type="password")
-        if st.button("Register"):
-            if register(new_username, new_password):
-                st.success("✅ Registered successfully! You can now log in.")
-            else:
-                st.error("❌ Username already exists. Try another.")
+        else:
+            if st.button("🔐 Already have an account? Login"):
+                st.session_state.auth_mode = "Login"
+                st.rerun()
 
 # ------------------ Main App ------------------
 if st.session_state.get("logged_in"):
-
     username = st.session_state.username
     filepath = get_user_filepath(username)
-    
+
     st.sidebar.header(f"👋 Welcome, {username}")
     if st.sidebar.button("🚪 Logout"):
         logout()
@@ -127,19 +165,30 @@ if st.session_state.get("logged_in"):
     )
     st.session_state.budget = budget_input
 
+    # ----------- Handle edit values BEFORE form ----------- #
+    description_default = ""
+    amount_default = 0.0
+
+    if st.session_state.edit_index is not None:
+        try:
+            selected_expense = st.session_state.expenses[st.session_state.edit_index]
+            description_default = selected_expense["description"]
+            amount_default = selected_expense["amount"]
+        except IndexError:
+            st.session_state.edit_index = None
+
     # Expense Input Form
     st.subheader("➕ Add / Edit Expense")
-    with st.form("expense_form", clear_on_submit=True):
+    with st.form("expense_form"):
         col1, col2 = st.columns(2)
         with col1:
-            description = st.text_input("📝 Description", 
-                value=st.session_state.expenses[st.session_state.edit_index]["description"] 
-                if st.session_state.edit_index is not None else "")
+            description = st.text_input("📝 Description", value=description_default)
         with col2:
-            amount = st.number_input("💵 Amount", min_value=0.0, format="%.2f",
-                value=st.session_state.expenses[st.session_state.edit_index]["amount"]
-                if st.session_state.edit_index is not None else 0.0)
-        submitted = st.form_submit_button("✅ Save")
+            amount = st.number_input("💵 Amount", min_value=0.0, format="%.2f", value=amount_default)
+
+        button_label = "✅ Update" if st.session_state.edit_index is not None else "✅ Add"
+        submitted = st.form_submit_button(button_label)
+
         if submitted:
             if description and amount > 0:
                 if st.session_state.edit_index is not None:
@@ -171,10 +220,14 @@ if st.session_state.get("logged_in"):
         for idx, exp in enumerate(st.session_state.expenses):
             col1, col2, col3 = st.columns([4, 2, 2])
             col1.markdown(f"**{exp['description']}** - ₹{exp['amount']:.2f}")
-            if col2.button("✏️ Edit", key=f"edit_{idx}"):
+            edit_key = f"edit_{idx}_{exp['description']}_{exp['amount']}"
+            delete_key = f"del_{idx}_{exp['description']}_{exp['amount']}"
+
+            if col2.button("✏️ Edit", key=edit_key):
                 st.session_state.edit_index = idx
                 st.rerun()
-            if col3.button("🗑️ Delete", key=f"del_{idx}"):
+
+            if col3.button("🗑️ Delete", key=delete_key):
                 st.session_state.expenses.pop(idx)
                 save_budget_data(filepath, st.session_state.budget, st.session_state.expenses)
                 st.rerun()
@@ -193,4 +246,4 @@ if st.session_state.get("logged_in"):
 
     # Footer
     st.markdown("---")
-    st.markdown("🧠 Made with ❤️ using Streamlit | [GitHub](https://github.com/SaiNehaa/Budget_tracker_app)")
+    st.markdown("[GitHub](https://github.com/SaiNehaa/Budget_tracker_app)")
